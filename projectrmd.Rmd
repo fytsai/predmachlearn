@@ -1,0 +1,63 @@
+---
+title: "Practical Machine Learning Course Project"
+output: html_document
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+The original data for this project is the Weight Lifting Exercise Dataset, which is collected from accelerometers worn by 6 participants doing weight lifting. The variable "classe" is the manner in which they did the exercise: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  
+  
+This project constructs a model to predict "classe", based on the data from <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>. This pml-training file is splitted into training data and testing data. The training data will be used to train the model, and the testing data will be used to validate the model and estimate out-of-sample error.
+
+1. Data Splitting:  
+  The pml-training data is loaded (19622 observations of 160 variables), and then splitted into 70% training and 30% testing data sets.  
+  In order to remove "#DIV/0!" at later steps, when loading the pml-training data, argument na.strings = c("NA", "#DIV/0!") is used to load them as NA's.  
+```{r, echo=FALSE}
+library(caret);library(kernlab);library(C50);library(plyr)
+setwd("C:/Users/tsai/Documents/Coursera/JHU_DataSci/08_Machlearn")
+```
+```{r}
+pml_training <- read.csv(file="pml-training.csv", na.strings = c("NA", "#DIV/0!"))
+set.seed(1235)
+inTrain = createDataPartition(pml_training$classe, p = 0.7)[[1]]
+training = pml_training[ inTrain,]; dim(training)
+testing = pml_training[-inTrain,]; dim(testing)
+```
+
+2. Data Cleaning:  
+  To prepare the training data for building model, columns with NA's are removed. The first 7 columns ("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window") are also removed since they cannot be used to predict "classe".
+  After cleaning, "classe" and other 52 variables remain. These will be used to train the model.   
+```{r}
+training <- training[, colSums(is.na(training)) == 0]
+training <- training[, -c(1:7)]
+dim(training); str(training)
+```
+
+3. Models:
+  Three different models are used on the training data. The first one is CART (method="rpart"), resulted with Accuracy=0.508.  
+```{r}
+(model1 <- train(classe ~ ., method="rpart", data=training))
+```
+  
+The second one is Single C5.0 Tree (method="C5.0Tree"), resulted with Accuracy=0.942.   
+```{r}
+(model2 <- train(classe ~ ., method="C5.0Tree", data=training))
+```
+
+The third one is C5.0 (method="C5.0"), with 5-fold cross validation. The resulting Accuracy of the optimal model is 0.993.  
+```{r}
+(model3 <- train(classe ~ ., method="C5.0", data=training, trControl = trainControl(method = "cv", number=5), prox=TRUE))
+```
+  
+To estimate the out-of-sample error, the above models are used to predict "classe" of the testing data.  
+```{r}
+confusionMatrix(testing$classe, predict(model1, newdata=testing))
+confusionMatrix(testing$classe, predict(model2, newdata=testing))
+confusionMatrix(testing$classe, predict(model3, newdata=testing))
+```
+The out-of-sample errors are estimated as 1-accuracy when predicting on the testing data. So for the 3 models, the out-of-sample errors are:  
+  1-0.4945=0.5055 for model1,  
+  1-0.966 =0.034  for model2,  
+  1-0.9942=0.0058 for model3.    
+   
+Among the models attempted, C5.0 has the least out-of-sample error, so this model is chosen for predicting the 20 cases in pml-testing data. (The prediction results are submitted separately for automatic grading.)
